@@ -1,0 +1,6 @@
+pytest
+httpx
+pytest-asyncio
+black
+flake8
+isort

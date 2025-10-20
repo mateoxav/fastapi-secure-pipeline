@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+SQLAlchemy>=2
+psycopg[binary]
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
