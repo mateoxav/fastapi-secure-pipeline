@@ -4,3 +4,4 @@ pytest-asyncio
 black
 flake8
 isort
+alembic
