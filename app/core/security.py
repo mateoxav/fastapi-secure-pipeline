@@ -14,9 +14,9 @@ def verify_password(plain_password: str, password_hash: str) -> bool:
     # Quick check before DB write/compare
     return pwd_context.verify(plain_password, password_hash)
 
-def create_access_token(subject: str, expires_minutes: Optional[int] = None) -> str:
+def create_access_token(subject: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
-        minutes=expires_minutes or settings.access_token_expire_minutes
+        minutes=settings.access_token_expire_minutes
     )
     to_encode = {"sub": subject, "exp": expire}
     return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
