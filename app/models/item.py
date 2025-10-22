@@ -12,4 +12,3 @@ class Item(Base):
 
     # Optional relationship; used for convenience in joins (not required by CRUD)
     owner = relationship("User")
-
