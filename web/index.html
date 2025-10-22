@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevSecOps API Demo</title>
+    <link href="styles.css" rel="stylesheet">
+</head>
+<body>
+    <main>
+        <h1>DevSecOps API Demo</h1>
+        <section id="auth-section">
+            <h2>Authentication</h2>
+            <form id="register-form">
+                <input type="email" id="register-email" placeholder="Email" required>
+                <input type="password" id="register-password" placeholder="Password" required>
+                <button type="submit">Register</button>
+            </form>
+            <form id="login-form">
+                <input type="email" id="login-email" placeholder="Email" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+            <p id="auth-status"></p>
+        </section>
+
+        <section id="items-section" class="hidden">
+            <h2>Your Items</h2>
+            <form id="create-item-form">
+                <input type="text" id="item-name" placeholder="Item Name" required>
+                <input type="text" id="item-desc" placeholder="Item Description">
+                <button type="submit">Create Item</button>
+            </form>
+            <ul id="items-list"></ul>
+            <button id="logout-btn">Logout</button>
+        </section>
+    </main>
+    <script src="app.js"></script>
+</body>
+</html>
