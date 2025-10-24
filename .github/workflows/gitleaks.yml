@@ -1,0 +1,25 @@
+name: Security - Gitleaks Secret Scanning
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Gitleaks scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history for a full scan
+
+      - name: Gitleaks Action
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          # A Gitleaks config can be added for more fine-grained control
+          # See https://github.com/gitleaks/gitleaks?tab=readme-ov-file#configuration
+          args: detect --source . --no-banner --redact --verbose
