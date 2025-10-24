@@ -1,0 +1,2 @@
+# ruleId  ignore  reason
+10010 IGNORE  "Ignore cookie without 'HttpOnly' on local dev"
