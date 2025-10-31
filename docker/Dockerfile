@@ -28,6 +28,10 @@ COPY --from=builder /opt/venv /opt/venv
 # Copy application source code
 COPY ./app ./app
 
+# Copy alembic config
+COPY alembic.ini .
+COPY alembic ./alembic
+
 # Set correct ownership
 RUN chown -R appuser:appuser /app
 USER appuser

@@ -6,3 +6,6 @@ psycopg[binary]
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
+email-validator
+alembic
+bcrypt==4.1.2
