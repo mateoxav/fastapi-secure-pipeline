@@ -1,34 +1,36 @@
+# This file defines the services, networks, and volumes
+# for the LOCAL DEVELOPMENT environment.
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      # WARNING: These are default, non-secret credentials for local development ONLY.
+      # In a real production environment, these MUST be loaded from a secure secret
+      # management system (e.g., Docker Secrets, Kubernetes Secrets, HashiCorp Vault,
+      # or a cloud provider's secret manager) and not hardcoded.
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppass
+      POSTGRES_DB: appdb
+    healthcheck:
+      # Command to check if the database is ready to accept connections
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+
   api:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: devsecops-api:local
-    env_file:
-      - .env
-    ports:
-      - "8000:8000"
+    env_file: [.env] # Correctly loads secrets and config for the API from an untracked .env file.
     depends_on:
       db:
-        # Wait for the database to be healthy before starting the API
+        # Ensures the API service only starts after the 'db' service is healthy
         condition: service_healthy
-
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: appuser
-      POSTGRES_PASSWORD: apppass
-      POSTGRES_DB: appdb
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      # Check if the database is ready to accept connections
-      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    ports: ["8000:8000"]
 
 volumes:
   pgdata: {}
