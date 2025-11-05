@@ -13,7 +13,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-
 # --- Runtime stage ---
 FROM python:3.12.0-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -28,6 +27,12 @@ COPY --from=builder /opt/venv /opt/venv
 # Copy application source code
 COPY ./app ./app
 COPY ./web ./web
+
+# Copy script and entrypoint
+COPY ./scripts ./scripts
+COPY docker/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 # Copy alembic config
 COPY alembic.ini .
 COPY alembic ./alembic
@@ -41,4 +46,5 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD python -c "import socket; s=socket.socket(); s.connect(('127.0.0.1', 8000))"
 
 EXPOSE 8000
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

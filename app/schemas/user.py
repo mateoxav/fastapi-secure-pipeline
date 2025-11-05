@@ -7,10 +7,10 @@ class UserCreate(UserBase):
 
     password: str = Field(
         ...,
-        min_length=8,
-        max_length=72,
+        min_length=12,
+        max_length=256,
         title="Password",
-        description="User password must be between 8 and 72 characters"
+        description="User password must be between 12 and 256 characters"
     )
 
 class UserRead(UserBase):

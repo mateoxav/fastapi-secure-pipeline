@@ -26,6 +26,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     env_file: [.env] # Correctly loads secrets and config for the API from an untracked .env file.
+    environment:
+      - AUTO_MIGRATE=true
     depends_on:
       db:
         # Ensures the API service only starts after the 'db' service is healthy
