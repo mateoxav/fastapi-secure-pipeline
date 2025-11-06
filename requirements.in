@@ -9,3 +9,4 @@ python-multipart
 email-validator
 alembic
 argon2-cffi
+gunicorn

@@ -1,0 +1,1359 @@
+--- File: .dockerignore ---
+.git
+.gitignore
+__pycache__/
+*.pyc
+.env
+tests/
+.venv/
+
+--- File: .env ---
+# .env.example
+DATABASE_URL=postgresql+psycopg://appuser:apppass@db:5432/appdb
+JWT_SECRET_KEY=replace_me_with_a_long_random_string
+
+POSTGRES_USER=appuser
+POSTGRES_PASSWORD=apppass
+POSTGRES_DB=appdb
+
+--- File: .env.example ---
+# Copy to .env for local development. This file is ignored by git.
+DATABASE_URL=postgresql+psycopg://appuser:apppass@db:5432/appdb
+JWT_SECRET_KEY=a-very-strong-and-super-secret-key-that-you-should-change
+
+--- File: .gitignore ---
+__pycache__/
+*.pyc
+.env
+.venv/
+dist/
+build/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.idea/
+.vscode/
+.DS_Store
+/.cache
+.pre-commit-config.yaml
+
+--- File: .pre-commit-config.yaml ---
+repos:
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks: [{ id: black }]
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.0
+    hooks: [{ id: flake8 }]
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks: [{ id: isort }]
+
+
+--- File: alembic.ini ---
+[alembic]
+script_location = alembic
+sqlalchemy.url = postgresql+psycopg://appuser:apppass@db:5432/appdb
+prepend_sys_path = .
+file_template = %%(rev)s_%%(slug)s
+
+[loggers]
+keys = root,sqlalchemy,alembic
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARN
+handlers = console
+qualname =
+
+[logger_sqlalchemy]
+level = WARN
+handlers =
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers = console
+qualname = alembic
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+
+--- File: compose.yaml ---
+# This file defines the services, networks, and volumes
+# for the LOCAL DEVELOPMENT environment.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      # WARNING: These are default, non-secret credentials for local development ONLY.
+      # In a real production environment, these MUST be loaded from a secure secret
+      # management system (e.g., Docker Secrets, Kubernetes Secrets, HashiCorp Vault,
+      # or a cloud provider's secret manager) and not hardcoded.
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    healthcheck:
+      # Command to check if the database is ready to accept connections
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    env_file: [.env] # Correctly loads secrets and config for the API from an untracked .env file.
+    environment:
+      - AUTO_MIGRATE=true
+    depends_on:
+      db:
+        # Ensures the API service only starts after the 'db' service is healthy
+        condition: service_healthy
+    ports: ["8000:8000"]
+
+volumes:
+  pgdata: {}
+
+
+--- File: LICENSE ---
+
+
+--- File: README.md ---
+[HTB Badge](https://labs.hackthebox.com/achievement/badge/1992707/215)
+
+--- File: requirements-dev.txt ---
+pytest
+httpx
+pytest-asyncio
+black
+flake8
+isort
+alembic
+pip-tools
+pytest-cov
+
+--- File: requirements.in ---
+fastapi
+uvicorn[standard]
+pydantic-settings
+SQLAlchemy>=2
+psycopg[binary]
+python-jose[cryptography]
+passlib[argon2]==1.7.4
+python-multipart
+email-validator
+alembic
+argon2-cffi
+gunicorn
+
+--- File: .github/dependabot.yml ---
+version: 2
+updates:
+  # Maintain dependencies for pip
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Maintain dependencies for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
+	  
+
+--- File: .github/workflows/ci.yml ---
+name: CI - Build, Test, Secure, and Push
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build_test_secure:
+    name: Build, Test, and Security Scan
+    runs-on: ubuntu-latest
+    # Grant permissions only for jobs that need them
+    permissions:
+      contents: read
+      packages: write # Required to push to GHCR
+      id-token: write # Required for keyless signing (Cosign)
+      security-events: write # Required to upload SARIF results
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U testuser -d testdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+      # Use a test database for the CI environment
+      DATABASE_URL: "postgresql+psycopg://testuser:testpass@localhost:5432/testdb"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests with pytest
+        run: pytest -q
+
+      # SCA - Software Composition Analysis with pip-audit
+      - name: Scan dependencies for vulnerabilities
+        uses: pypa/gh-action-pip-audit@v1
+
+      # SBOM - Generate Software Bill of Materials
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          pip install cyclonedx-bom
+          cyclonedx-py --format json -o sbom.json
+
+      # These steps should only run on push to the main branch, not on PRs from forks
+      - name: Set up Docker Buildx
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: build-and-push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          provenance: false # SLSA Provenance is generated in a later step
+
+      # IAST - Image Vulnerability Scanning with Trivy
+      - name: Scan container image with Trivy
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.IMAGE_NAME }}:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # SIGN - Sign the container image using Cosign
+      - name: Install Cosign
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the container image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: cosign sign --yes ${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
+
+      # ATTEST - Create SLSA build provenance attestation
+      - name: Attest build provenance
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: '${{ env.IMAGE_NAME }}'
+          subject-digest: '${{ steps.build-and-push.outputs.digest }}'
+          push-to-registry: true
+
+      # Upload SBOM artifact
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.json
+
+--- File: .github/workflows/codeql.yml ---
+name: SAST - CodeQL
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '30 5 * * 1' # At 05:30 on Monday
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          # Use more comprehensive queries
+          queries: security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+		
+
+--- File: .github/workflows/dast-zap.yml ---
+name: DAST - OWASP ZAP
+on:
+  workflow_dispatch: # Allows manual triggering
+  schedule:
+    - cron: "0 6 * * 1" # Weekly on Monday at 6 AM
+
+jobs:
+  zap_scan:
+    name: ZAP Baseline Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run API and Database with Docker Compose
+        run: docker compose -f compose.yaml up -d
+
+      - name: Wait for API to be ready
+        run: |
+          echo "Waiting for API to be ready..."
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8000/health > /dev/null; then
+              echo "API is ready!"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become ready in time."
+          exit 1
+
+      - name: Run ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: "http://localhost:8000/docs" # Scan the OpenAPI docs for endpoints
+          rules_file_name: "zap/rules.tsv"
+          cmd_options: "-a" # Include alpha rules
+
+--- File: .github/workflows/gitleaks.yml ---
+name: Security - Gitleaks Secret Scanning
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Gitleaks scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history for a full scan
+
+      - name: Gitleaks Action
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          # A Gitleaks config can be added for more fine-grained control
+          # See https://github.com/gitleaks/gitleaks?tab=readme-ov-file#configuration
+          args: detect --source . --no-banner --redact --verbose
+
+--- File: .github/workflows/scorecards.yml ---
+name: Security - OpenSSF Scorecard
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Weekly on Monday at 8 AM
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload Scorecard results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+--- File: alembic/env.py ---
+import os
+from logging.config import fileConfig
+from sqlalchemy import engine_from_config
+from sqlalchemy import pool
+from alembic import context
+
+config = context.config
+
+# Interpret the config file for Python logging
+# This line sets up loggers basically
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+# add model's MetaData object here
+from app.db.base import Base
+target_metadata = Base.metadata
+
+# Allow DATABASE_URL override via env var, useful for CI/CD
+db_url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+config.set_main_option("sqlalchemy.url", db_url)
+
+def run_migrations_offline() -> None:
+    # Run migrations in offline mode
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+    with context.begin_transaction():
+        context.run_migrations()
+
+def run_migrations_online() -> None:
+    # Run migrations in online mode
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    with connectable.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+
+--- File: alembic/versions/0001_create_users_and_items_tables.py ---
+"""Create users and items tables
+
+Revision ID: 0001
+Revises: 
+Create Date: 2025-10-23 12:58:12.123456
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic
+revision = '0001'
+down_revision = None
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('users',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('email', sa.String(length=255), nullable=False),
+    sa.Column('hashed_password', sa.String(length=255), nullable=False),
+    sa.Column('is_active', sa.Boolean(), nullable=True),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
+    op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
+    op.create_table('items',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(length=255), nullable=False),
+    sa.Column('description', sa.Text(), nullable=True),
+    sa.Column('owner_id', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['owner_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_items_id'), 'items', ['id'], unique=False)
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_items_id'), table_name='items')
+    op.drop_table('items')
+    op.drop_index(op.f('ix_users_id'), table_name='users')
+    op.drop_index(op.f('ix_users_email'), table_name='users')
+    op.drop_table('users')
+    # ### end Alembic commands ###
+
+--- File: app/main.py ---
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from app.api.auth import router as auth_router
+from app.api.items import router as items_router
+from app.core.config import settings 
+
+app = FastAPI(title=settings.project_name, version="1.0.0")
+
+# PRODUCTION-READY MIDDLEWARE CONFIGURATION
+# This application follows security best practices by being secure by default
+# and loading its configuration from the environment (via the settings module).
+# This avoids hardcoding development settings like ["*"] into the codebase.
+
+# Protect against Host Header attacks
+# Loads the list of allowed hosts directly from settings
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.allowed_hosts
+)
+
+# Configure Cross-Origin Resource Sharing (CORS)
+# Loads the list of allowed origins directly from settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[str(origin) for origin in settings.cors_origins],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["*"],
+)
+
+
+# STATIC FILES SERVING
+# Mounts the 'web' directory to serve static files (HTML, CSS, JS)
+# This allows the frontend to be served directly from the same application.
+# Files in the 'web' folder are accessible via the "/static" URL path.
+app.mount("/static", StaticFiles(directory="web"), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """
+    Serves the main index.html file as the root of the application.
+    This allows users to navigate directly to http://localhost:8000 to see the frontend.
+    """
+    return FileResponse('web/index.html')
+
+
+@app.get("/health", tags=["Health"])
+def health():
+    """
+    Simple liveness probe endpoint to check if the application is running.
+    """
+    return {"status": "ok"}
+
+
+# --- API ROUTERS ---
+# Include the API endpoints for authentication and items.
+# These are the core business logic of the application.
+app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+app.include_router(items_router, prefix="/items", tags=["Items"])
+
+
+--- File: app/api/__init__.py ---
+
+
+--- File: app/api/auth.py ---
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from app.core.security import verify_password, create_access_token, hash_password
+from app.db.session import get_db
+from app.models.user import User
+from app.schemas.user import UserCreate, UserRead
+
+router = APIRouter()
+
+@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+def register(user_in: UserCreate, db: Session = Depends(get_db)):
+    # Register a new user
+    user = db.query(User).filter(User.email == user_in.email).first()
+    if user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists.",
+        )
+    hashed_password = hash_password(user_in.password)
+    db_user = User(email=user_in.email, hashed_password=hashed_password)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@router.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # Login and get an access token.
+    user = db.query(User).filter(User.email == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(subject=str(user.id))
+    return {"access_token": access_token, "token_type": "bearer"}
+
+--- File: app/api/items.py ---
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+from typing import List
+
+from app.db.session import get_db
+from app.models.item import Item
+from app.models.user import User
+from app.schemas.item import ItemCreate, ItemRead, ItemUpdate
+from app.core.security import decode_token
+
+router = APIRouter()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    # Dependency to get the current authenticated user
+    user_id = decode_token(token)
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not user_id:
+        raise credentials_exception
+    user = db.get(User, int(user_id)) # Using modern Session.get()
+    if not user or not user.is_active:
+        raise credentials_exception
+    return user
+
+@router.post("/", response_model=ItemRead, status_code=status.HTTP_201_CREATED)
+def create_item(payload: ItemCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Create a new item for the current user.
+    item = Item(**payload.model_dump(), owner_id=current_user.id)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+@router.get("/", response_model=List[ItemRead])
+def get_items(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Retrieve all items for the current user.
+    return db.query(Item).filter(Item.owner_id == current_user.id).all()
+
+@router.get("/{item_id}", response_model=ItemRead)
+def get_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Retrieve a specific item by its ID.
+    item = db.get(Item, item_id)
+    if not item or item.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return item
+
+@router.put("/{item_id}", response_model=ItemRead)
+def update_item(item_id: int, payload: ItemUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Update an existing item.
+    item = db.get(Item, item_id)
+    if not item or item.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(item, key, value)
+
+    db.commit()
+    db.refresh(item)
+    return item
+
+@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Delete an item. 
+    item = db.get(Item, item_id)
+    if item and item.owner_id == current_user.id:
+        db.delete(item)
+        db.commit()
+    # Always return 204 to avoid leaking information about item existence
+    return None
+
+--- File: app/core/__init__.py ---
+
+
+--- File: app/core/config.py ---
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, AnyHttpUrl
+from pydantic import field_validator
+from typing import List
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
+    project_name: str = "DevSecOps API"
+    database_url: str = Field(..., alias="DATABASE_URL")
+    jwt_secret_key: str = Field(..., alias="JWT_SECRET_KEY")
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60
+
+    # Load from env (accepts CSV string or JSON list)
+    allowed_hosts: List[str] = Field(default=["localhost", "127.0.0.1"], alias="ALLOWED_HOSTS")
+    cors_origins: List[AnyHttpUrl] = Field(
+        default=[
+            "http://localhost",
+            "http://127.0.0.1:8000",
+            "http://localhost:8000",
+        ],
+        alias="CORS_ORIGINS",
+    )
+
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def _split_hosts_csv(cls, v):
+        if isinstance(v, str):
+            # handles: "localhost,127.0.0.1"
+            return [x.strip() for x in v.split(",") if x.strip()]
+        return v
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_cors_csv(cls, v):
+        if isinstance(v, str) and not v.strip().startswith("["):
+            # handles CSV string; for JSON use ["http://...","http://..."]
+            return [x.strip() for x in v.split(",") if x.strip()]
+        return v
+
+settings = Settings()
+
+
+--- File: app/core/security.py ---
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+from app.core.config import settings
+
+# Password Hashing Configuration
+
+# We use Argon2id, the modern standard for password hashing, recommended by OWASP.
+# Passlib's CryptContext allows us to easily manage hashing schemes.
+# If we need to upgrade hashing parameters or add a new scheme (e.g., bcrypt),
+# passlib will automatically handle rehashing old passwords upon verification.
+
+# Argon2id parameters based on OWASP minimum recommendations:
+# m = 19 MiB (memory cost) 19 * 1024 = 19456 KiB
+# t = 2 (time cost / iterations)
+# p = 1 (parallelism)
+
+pwd_context = CryptContext(
+    schemes=["argon2"], # Default and only scheme is argon2
+    deprecated="auto", # Automatically mark old schemes as deprecated if new ones are added
+    argon2__type="ID",
+    argon2__memory_cost=19456,  # 19 MiB
+    argon2__time_cost=2,
+    argon2__parallelism=1,
+)
+
+def hash_password(plain_password: str) -> str:
+    return pwd_context.hash(plain_password)
+
+def verify_password(plain_password: str, password_hash: str) -> bool:
+    return pwd_context.verify(plain_password, password_hash)
+
+def create_access_token(subject: str) -> str:
+    # Set the token expiration time
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.access_token_expire_minutes
+    )
+    # Payload to encode
+    to_encode = {"sub": subject, "exp": expire}
+    # Encode the token using the secret key and algorithm from settings
+    return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+def decode_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+--- File: app/db/__init__.py ---
+
+
+--- File: app/db/base_class.py ---
+from sqlalchemy.orm import DeclarativeBase
+
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models."""
+    pass
+
+--- File: app/db/base.py ---
+# Import the Base class from the new file
+from app.db.base_class import Base
+
+# Import all the models, so that Base has them registered and Alembic can see them.
+from app.models.user import User  # noqa
+from app.models.item import Item  # noqa
+
+--- File: app/db/session.py ---
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.core.config import settings
+
+# Create engine and session factory
+engine = create_engine(settings.database_url, pool_pre_ping=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Dependency for FastAPI routes
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+--- File: app/models/__init__.py ---
+
+
+--- File: app/models/item.py ---
+from sqlalchemy import Column, Integer, String, ForeignKey, Text
+from sqlalchemy.orm import relationship
+from app.db.base_class import Base
+
+class Item(Base):
+    __tablename__ = "items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Optional relationship; used for convenience in joins (not required by CRUD)
+    owner = relationship("User")
+
+
+--- File: app/models/user.py ---
+from sqlalchemy import Column, Integer, String, Boolean
+from app.db.base_class import Base
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True)
+
+--- File: app/schemas/__init__.py ---
+
+
+--- File: app/schemas/item.py ---
+from pydantic import BaseModel
+
+class ItemBase(BaseModel):
+    name: str
+    description: str | None = None
+
+class ItemCreate(ItemBase):
+    pass
+
+class ItemUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+class ItemRead(ItemBase):
+    id: int
+    owner_id: int
+
+    class Config:
+        from_attributes = True
+
+
+
+--- File: app/schemas/user.py ---
+from pydantic import BaseModel, EmailStr, Field
+
+class UserBase(BaseModel):
+    email: EmailStr
+
+class UserCreate(UserBase):
+
+    password: str = Field(
+        ...,
+        min_length=12,
+        max_length=256,
+        title="Password",
+        description="User password must be between 12 and 256 characters"
+    )
+
+class UserRead(UserBase):
+    id: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+--- File: docker/Dockerfile ---
+# syntax=docker/dockerfile:1
+
+# --- Builder stage ---
+# Specific version for reproducibility
+FROM python:3.12.0-slim AS builder
+WORKDIR /app
+
+# Create a virtual environment to isolate dependencies
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install dependencies into the venv
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# --- Runtime stage ---
+FROM python:3.12.0-slim
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+WORKDIR /app
+
+# Create a non-root user for security
+RUN useradd --create-home --shell /bin/bash -u 10001 appuser
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application source code
+COPY ./app ./app
+COPY ./web ./web
+
+# Copy script and entrypoint
+COPY ./scripts ./scripts
+COPY docker/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+# Copy alembic config
+COPY alembic.ini .
+COPY alembic ./alembic
+
+# Set correct ownership
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Healthcheck to verify the server is running
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD python -c "import socket; s=socket.socket(); s.connect(('127.0.0.1', 8000))"
+
+EXPOSE 8000
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+--- File: docker/entrypoint.sh ---
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${AUTO_MIGRATE:-false}" == "true" ]]; then
+  echo "[entrypoint] Applying DB migrations..."
+  python scripts/migrate.py
+fi
+
+exec "$@"
+
+--- File: scripts/migrate.py ---
+import os, time, sys
+import psycopg  # PostgreSQL client library
+from alembic.config import Config  # Alembic configuration loader
+from alembic import command  # Alembic migration commands
+
+# Get the database URL from environment variables
+DB_URL = os.environ.get("DATABASE_URL")
+
+# Exit if is not configured
+if not DB_URL:
+    print("Error: DATABASE_URL environment variable is not set.", file=sys.stderr)
+    sys.exit("DATABASE_URL not set")
+
+# psycopg (used for wait_db and the lock) requires a ‘postgresql://’ URL
+# SQLAlchemy (used by Alembic) requires ‘postgresql+psycopg://’
+# We create a version of the URL specific to psycopg
+PSYCOPG_DB_URL = DB_URL.replace("postgresql+psycopg://", "postgresql://")
+
+# Arbitrary constant used for advisory locking
+LOCK_KEY = 42
+
+# Function to wait until the database is ready
+def wait_db(url: str, attempts=60, sleep=2):
+    for i in range(attempts):
+        try:
+            # Try to connect to the database with a short timeout
+            with psycopg.connect(url, connect_timeout=3) as _:
+                print("[wait_db] DB connection successful.")
+                return True  # Connection successful
+        except Exception as e:
+            # Añadido: Imprime el error para depuración
+            print(f"[wait_db] DB not ready (Attempt {i+1}/{attempts}). Retrying... Error: {e}", file=sys.stderr)
+            time.sleep(sleep)  # Wait before retrying
+    return False  # Failed to connect after all attempts
+
+
+# Exit if the database URL is missing or the DB is not ready
+if not wait_db(PSYCOPG_DB_URL): 
+    sys.exit("DB not ready after multiple attempts.")
+
+# Connect to the database with autocommit enabled
+with psycopg.connect(PSYCOPG_DB_URL, autocommit=True) as conn: 
+    with conn.cursor() as cur:
+        # Try to acquire an advisory lock to prevent concurrent migrations
+        print("[migrate.py] Waiting to acquire migration lock...")
+        while True:
+            cur.execute("SELECT pg_try_advisory_lock(%s)", (LOCK_KEY,))
+            if cur.fetchone()[0]:  # Lock acquired
+                print("[migrate.py] Migration lock acquired.")
+                break
+            time.sleep(1)  # Wait and retry
+
+        try:
+            # Load Alembic configuration and apply migrations up to the latest version
+            print("[migrate.py] Running Alembic migrations (upgrade head)...")
+            cfg = Config("alembic.ini")
+            # Alembic usará la variable de entorno DATABASE_URL original 
+            # (leída desde alembic/env.py), lo cual es correcto.
+            command.upgrade(cfg, "head")
+            print("[migrate.py] Migrations applied successfully.")
+        finally:
+            # Release the advisory lock
+            cur.execute("SELECT pg_advisory_unlock(%s)", (LOCK_KEY,))
+            print("[migrate.py] Migration lock released.")
+
+--- File: tests/test_health.py ---
+from fastapi.testclient import TestClient
+from app.main import app
+
+def test_health():
+    client = TestClient(app)
+    res = client.get("/health")
+    assert res.status_code == 200
+    assert res.json() == {"status": "ok"}
+
+
+
+--- File: web/app.js ---
+document.addEventListener("DOMContentLoaded", () => {
+    const API_URL = "http://localhost:8000";
+    let token = localStorage.getItem("accessToken");
+
+    const authSection = document.getElementById("auth-section");
+    const itemsSection = document.getElementById("items-section");
+    const authStatus = document.getElementById("auth-status");
+    const itemsList = document.getElementById("items-list");
+
+    const showView = () => {
+        if (token) {
+            authSection.classList.add("hidden");
+            itemsSection.classList.remove("hidden");
+            fetchItems();
+        } else {
+            authSection.classList.remove("hidden");
+            itemsSection.classList.add("hidden");
+        }
+    };
+
+    // Event Listeners
+    document.getElementById("register-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("register-email").value;
+        const password = document.getElementById("register-password").value;
+        try {
+            const res = await fetch(`${API_URL}/auth/register`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password }),
+            });
+            if (!res.ok) throw new Error("Registration failed.");
+            authStatus.textContent = "Registration successful! Please log in.";
+        } catch (err) {
+            authStatus.textContent = err.message;
+        }
+    });
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("login-email").value;
+        const password = document.getElementById("login-password").value;
+        // OAuth2 Password Flow requires form-encoded data
+        const body = new URLSearchParams({ username: email, password });
+        try {
+            const res = await fetch(`${API_URL}/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body,
+            });
+            if (!res.ok) throw new Error("Invalid credentials.");
+            const data = await res.json();
+            token = data.access_token;
+            localStorage.setItem("accessToken", token);
+            authStatus.textContent = "";
+            showView();
+        } catch (err) {
+            authStatus.textContent = err.message;
+        }
+    });
+
+    document.getElementById("logout-btn").addEventListener("click", () => {
+        token = null;
+        localStorage.removeItem("accessToken");
+        itemsList.innerHTML = "";
+        showView();
+    });
+
+    document.getElementById("create-item-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = document.getElementById("item-name").value;
+        const description = document.getElementById("item-desc").value;
+        try {
+            await apiFetch("/items/", {
+                method: "POST",
+                body: JSON.stringify({ name, description }),
+            });
+            document.getElementById("item-name").value = "";
+            document.getElementById("item-desc").value = "";
+            fetchItems();
+        } catch (err) {
+            console.error("Failed to create item:", err);
+        }
+    });
+
+    // API & UI Functions
+    const apiFetch = async (endpoint, options = {}) => {
+        const headers = {
+            "Content-Type": "application/json",
+            ...options.headers,
+        };
+        if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+        }
+        const res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+        if (!res.ok) {
+            if (res.status === 401) { // Token expired or invalid
+                token = null;
+                localStorage.removeItem("accessToken");
+                showView();
+            }
+            throw new Error(`API error: ${res.statusText}`);
+        }
+        if (res.status === 204) return null; // No Content
+        return res.json();
+    };
+
+    const fetchItems = async () => {
+        try {
+            const items = await apiFetch("/items/");
+            itemsList.innerHTML = ""; // Clear existing list
+            items.forEach(item => {
+                const li = document.createElement("li");
+                li.innerHTML = `<span>${item.name} - ${item.description || 'No description'}</span>`;
+                const deleteBtn = document.createElement("button");
+                deleteBtn.textContent = "Delete";
+                deleteBtn.onclick = async () => {
+                    await apiFetch(`/items/${item.id}`, { method: "DELETE" });
+                    fetchItems();
+                };
+                li.appendChild(deleteBtn);
+                itemsList.appendChild(li);
+            });
+        } catch (err) {
+            console.error("Failed to fetch items:", err);
+        }
+    };
+
+    showView(); // Initial view setup
+});
+
+--- File: web/index.html ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevSecOps API Demo</title>
+    <link href="/static/styles.css" rel="stylesheet">
+</head>
+<body>
+    <main>
+        <h1>DevSecOps API Demo</h1>
+        <section id="auth-section">
+            <h2>Authentication</h2>
+            <form id="register-form">
+                <input type="email" id="register-email" placeholder="Email" required>
+                <input type="password" id="register-password" placeholder="Password" required>
+                <button type="submit">Register</button>
+            </form>
+            <form id="login-form">
+                <input type="email" id="login-email" placeholder="Email" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+            <p id="auth-status"></p>
+        </section>
+
+        <section id="items-section" class="hidden">
+            <h2>Your Items</h2>
+            <form id="create-item-form">
+                <input type="text" id="item-name" placeholder="Item Name" required>
+                <input type="text" id="item-desc" placeholder="Item Description">
+                <button type="submit">Create Item</button>
+            </form>
+            <ul id="items-list"></ul>
+            <button id="logout-btn">Logout</button>
+        </section>
+    </main>
+    <script src="/static/app.js"></script>
+</body>
+</html>
+
+--- File: web/styles.css ---
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    background-color: #f4f4f9;
+    color: #333;
+}
+main {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 1rem;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+h1, h2 {
+    text-align: center;
+    color: #4a4a4a;
+}
+section {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    border-top: 1px solid #eee;
+}
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+input {
+    padding: 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+button {
+    padding: 0.75rem;
+    border: none;
+    border-radius: 4px;
+    background-color: #007bff;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+button:hover {
+    background-color: #0056b3;
+}
+#logout-btn {
+    background-color: #dc3545;
+}
+#logout-btn:hover {
+    background-color: #c82333;
+}
+.hidden {
+    display: none;
+}
+#items-list {
+    list-style: none;
+    padding: 0;
+}
+#items-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+#items-list li button {
+    background: #f44336;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+}
+#auth-status {
+    text-align: center;
+    font-weight: bold;
+}
+
+--- File: zap/rules.tsv ---
+# ruleId  ignore  reason
+10010 IGNORE  "Ignore cookie without 'HttpOnly' on local dev"
+
+

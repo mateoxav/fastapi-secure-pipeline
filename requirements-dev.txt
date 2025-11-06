@@ -5,3 +5,5 @@ black
 flake8
 isort
 alembic
+pip-tools
+pytest-cov
