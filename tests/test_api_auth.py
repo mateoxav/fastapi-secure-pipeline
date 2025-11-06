@@ -14,9 +14,7 @@ def client():
 @pytest.fixture
 def db_session(mocker):
     # Mock the get_db dependency to use a test session
-    # Note: This is a simple mock. For a full test suite, you'd
-    # set up a dedicated test database (e.g., via DATABASE_URL env var)
-    # and clean it between tests.
+    # Note: This is a simple mock. In a real test, you might want to use a test database.
     db = mocker.MagicMock(spec=Session)
     
     # Mock app's dependency_overrides to use this mock
