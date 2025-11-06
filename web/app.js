@@ -1,5 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const API_URL = "http://localhost:8000";
+    // Use relative paths. This allows the frontend to work
+    // from any domain, as it assumes the API is at the same origin
+    const API_URL = "";
     let token = localStorage.getItem("accessToken");
 
     const authSection = document.getElementById("auth-section");

@@ -3,9 +3,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.api.auth import router as auth_router
 from app.api.items import router as items_router
 from app.core.config import settings 
+import os
+
 
 app = FastAPI(title=settings.project_name, version="1.0.0")
 
@@ -30,6 +34,18 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
+
+# --- OPTIONAL PRODUCTION MIDDLEWARE ---
+# These are disabled by default but can be enabled in production
+# by setting the corresponding environment variables.
+
+# Enable this if you plan to use a proxy (like Nginx or a load balancer)
+# that handles TLS termination (HTTPS).
+# Env var: ENABLE_HTTPS_REDIRECT=true
+if os.getenv("ENABLE_HTTPS_REDIRECT", "false").lower() == "true":
+    # Trusts X-Forwarded-Proto and X-Forwarded-For from any host ("*")
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+    app.add_middleware(HTTPSRedirectMiddleware)
 
 
 # STATIC FILES SERVING

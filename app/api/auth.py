@@ -15,7 +15,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     if user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email already exists.",
+            detail="The provided email may already be in use.",
         )
     hashed_password = hash_password(user_in.password)
     db_user = User(email=user_in.email, hashed_password=hashed_password)

@@ -1,1 +1,0 @@
-[HTB Badge](https://labs.hackthebox.com/achievement/badge/1992707/215)

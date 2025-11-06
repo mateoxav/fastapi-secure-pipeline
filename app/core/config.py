@@ -13,15 +13,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
 
     # Load from env (accepts CSV string or JSON list)
-    allowed_hosts: List[str] = Field(default=["localhost", "127.0.0.1"], alias="ALLOWED_HOSTS")
-    cors_origins: List[AnyHttpUrl] = Field(
-        default=[
-            "http://localhost",
-            "http://127.0.0.1:8000",
-            "http://localhost:8000",
-        ],
-        alias="CORS_ORIGINS",
-    )
+    # These are now required and must be set in the .env file
+    allowed_hosts: List[str] = Field(..., alias="ALLOWED_HOSTS")
+    cors_origins: List[AnyHttpUrl] = Field(..., alias="CORS_ORIGINS")
 
     @field_validator("allowed_hosts", mode="before")
     @classmethod
