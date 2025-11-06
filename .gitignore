@@ -12,4 +12,3 @@ htmlcov/
 .vscode/
 .DS_Store
 /.cache
-.pre-commit-config.yaml
