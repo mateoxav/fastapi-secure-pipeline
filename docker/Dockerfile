@@ -23,7 +23,7 @@ COPY requirements.txt .
 # This ensures the build is reproducible and doesn't depend on PyPI availability at build time.
 RUN /opt/venv/bin/pip install --upgrade pip && \
     /opt/venv/bin/pip download -r requirements.txt -d /wheels && \
-    /opt/venv/bin/pip install --no-index --find-links=/wheels -r requirements.txt
+    /opt/venv/bin/pip install --no-index --find-links=/wheels --require-hashes -r requirements.txt
 
 # --- Runtime stage ---
 FROM python:3.12.0-slim@sha256:19a6235339a74eca01227b03629f63b6f5020abc21142436eced6ec3a9839a76

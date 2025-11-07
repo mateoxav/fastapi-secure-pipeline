@@ -1,26 +1,33 @@
-name: DAST - OWASP ZAP
+name: DAST - OWASP ZAP (API)
+
 on:
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch: # Manual trigger
   schedule:
-    - cron: "0 6 * * 1" # Weekly on Monday at 6 AM
+    - cron: "0 6 * * 1" # Weekly on Monday at 06:00 UTC
+
+permissions:
+  contents: read
 
 jobs:
   zap_scan:
-    name: ZAP Baseline Scan
+    name: OWASP ZAP API Scan against FastAPI
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Run API and Database with Docker Compose
+      # Start full stack using the same compose file as local dev
+      - name: Start API and DB with Docker Compose
         run: docker compose -f compose.yaml up -d
 
-      - name: Wait for API to be ready
+      # Wait until the /health endpoint is ready
+      - name: Wait for API readiness
         run: |
           echo "Waiting for API to be ready..."
-          for i in {1..30}; do
+          for i in {1..60}; do
             if curl -fsS http://localhost:8000/health > /dev/null; then
-              echo "API is ready!"
+              echo "API is ready."
               exit 0
             fi
             sleep 2
@@ -28,9 +35,19 @@ jobs:
           echo "API did not become ready in time."
           exit 1
 
-      - name: Run ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
+      # Use API scan against OpenAPI spec
+      - name: ZAP API Scan (OpenAPI)
+        uses: zaproxy/action-api-scan@v0.9.0
         with:
-          target: "http://localhost:8000/docs" # Scan the OpenAPI docs for endpoints
+          # Target the OpenAPI schema served by FastAPI
+          target: "http://localhost:8000/openapi.json"
           rules_file_name: "zap/rules.tsv"
-          cmd_options: "-a" # Include alpha rules
+          # Do not create GitHub issues automatically; keep results in the Security tab / logs
+          allow_issue_writing: false
+          # -a enables alpha/beta rules for broader coverage
+          cmd_options: "-a"
+
+      # Always tear down the environment
+      - name: Shutdown Docker Compose stack
+        if: always()
+        run: docker compose -f compose.yaml down

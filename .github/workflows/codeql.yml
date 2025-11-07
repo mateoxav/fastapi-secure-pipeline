@@ -1,11 +1,12 @@
 name: SAST - CodeQL
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '30 5 * * 1' # At 05:30 on Monday
+    - cron: "30 5 * * 1" # Weekly on Monday at 05:30 UTC
 
 permissions:
   contents: read
@@ -13,19 +14,18 @@ permissions:
 
 jobs:
   analyze:
-    name: CodeQL Analysis
+    name: CodeQL Analysis (Python)
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: python
-          # Use more comprehensive queries
           queries: security-and-quality
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-		
+        uses: github/codeql-action/analyze@v4

@@ -1,4 +1,5 @@
 name: Security - Gitleaks Secret Scanning
+
 on:
   push:
     branches: [ main ]
@@ -7,19 +8,23 @@ on:
 
 permissions:
   contents: read
+  security-events: write
 
 jobs:
   scan:
-    name: Gitleaks scan
+    name: Gitleaks scan for secrets
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Fetches all history for a full scan
 
-      - name: Gitleaks Action
-        uses: gitleaks/gitleaks-action@v2
+    steps:
+      - name: Checkout repository (full history for better scanning)
+        uses: actions/checkout@v5
         with:
-          # A Gitleaks config can be added for more fine-grained control
-          # See https://github.com/gitleaks/gitleaks?tab=readme-ov-file#configuration
-          args: detect --source . --no-banner --redact --verbose
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2.3.9
+        with:
+          # Use a repo-level config if present (recommended)
+          config-path: .gitleaks.toml
+          # Redact secrets in logs, fail pipeline on findings
+          redact: "true"

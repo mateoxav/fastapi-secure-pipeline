@@ -1,10 +1,53 @@
 repos:
+  # Basic hygiene hooks (whitespace, EOF, YAML/JSON/TOML validity, etc.)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+
+  # Black - Opinionated formatter (latest stable)
   - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks: [{ id: black }]
-  - repo: https://github.com/pycqa/flake8
-    rev: 7.1.0
-    hooks: [{ id: flake8 }]
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks: [{ id: isort }]
+    rev: 25.9.0
+    hooks:
+      - id: black
+        args: ["--line-length=88"]
+
+  # isort - Keep imports clean and consistent
+  - repo: https://github.com/PyCQA/isort
+    rev: 6.1.0
+    hooks:
+      - id: isort
+        args: ["--profile=black"]
+
+  # Flake8 - Linting (style + simple bugs)
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        additional_dependencies:
+          - flake8-bugbear
+
+  # Bandit - Python security linter (SAST-lite)
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.6
+    hooks:
+      - id: bandit
+        args:
+          - "-r"
+          - "app"
+        exclude: ^tests/
+
+  # Gitleaks - Prevent committing secrets
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
+        # Use project config if present; otherwise defaults are strong
+        args:
+          - "--no-banner"
+        stages: [commit]
