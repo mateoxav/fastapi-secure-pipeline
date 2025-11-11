@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import List
@@ -72,4 +72,5 @@ def delete_item(item_id: int, db: Session = Depends(get_db), current_user: User 
         db.delete(item)
         db.commit()
     # Always return 204 to avoid leaking information about item existence
-    return None
+    # We return a Response object directly to ensure no body (like 'null') is sent.
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

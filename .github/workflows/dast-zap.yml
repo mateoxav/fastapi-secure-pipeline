@@ -7,15 +7,32 @@ on:
 
 permissions:
   contents: read
+  security-events: write # Needed to upload SARIF
 
 jobs:
   zap_scan:
-    name: OWASP ZAP API Scan against FastAPI
+    name: OWASP ZAP API Scan (Authenticated)
     runs-on: ubuntu-latest
+
+    env:
+      # Use a unique email for this run to avoid conflicts
+      ZAP_USER_EMAIL: "zap-test-${{ github.run_id }}@example.com"
+      ZAP_USER_PASS: "VeryS#cureP@sswordForZAP123"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      # --- Create .env file if it does not exist ---
+      # This is required by compose.yaml (env_file: [.env])
+      - name: Create .env file from example (if not present)
+        run: |
+          if [ ! -f .env ]; then
+            echo "Creating .env from .env.example..."
+            cp .env.example .env
+          else
+            echo ".env file already exists, using it."
+          fi
 
       # Start full stack using the same compose file as local dev
       - name: Start API and DB with Docker Compose
@@ -34,18 +51,57 @@ jobs:
           done
           echo "API did not become ready in time."
           exit 1
+      
+      # --- Authenticate ZAP User ---
+      - name: Register ZAP test user
+        run: |
+          curl -s -X POST "http://localhost:8000/auth/register" \
+            -H "Content-Type: application/json" \
+            -d '{"email": "${{ env.ZAP_USER_EMAIL }}", "password": "${{ env.ZAP_USER_PASS }}"}' \
+            || echo "User registration failed (may already exist, which is ok)."
 
-      # Use API scan against OpenAPI spec
-      - name: ZAP API Scan (OpenAPI)
+      # --- Use step outputs instead of GITHUB_ENV ---
+      - name: Log in and get JWT token
+        id: get_token
+        run: |
+          TOKEN=$(curl -s -X POST "http://localhost:8000/auth/login" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "username=${{ env.ZAP_USER_EMAIL }}&password=${{ env.ZAP_USER_PASS }}" \
+            | jq -r .access_token)
+          
+          if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
+            echo "::error::Failed to retrieve ZAP auth token."
+            exit 1
+          fi
+          # Mask the token in logs
+          echo "::add-mask::${TOKEN}"
+          # Set the token as an output for this step
+          echo "token=${TOKEN}" >> $GITHUB_OUTPUT
+          echo "Successfully obtained token."
+
+      # --- Run ZAP Scan (Authenticated) ---
+      # --- MODIFIED: Read token from step output ---
+      - name: ZAP API Scan (Authenticated OpenAPI)
         uses: zaproxy/action-api-scan@v0.9.0
         with:
           # Target the OpenAPI schema served by FastAPI
           target: "http://localhost:8000/openapi.json"
           rules_file_name: "zap/rules.tsv"
-          # Do not create GitHub issues automatically; keep results in the Security tab / logs
           allow_issue_writing: false
-          # -a enables alpha/beta rules for broader coverage
-          cmd_options: "-a"
+          # -a enables alpha/beta rules
+          # -z 'auth.header.Authorization=...' tells ZAP to add this
+          # header to *every* request it makes, using the token from the previous step.
+          cmd_options: "-a -z 'auth.header.Authorization=Bearer ${{ steps.get_token.outputs.token }}'"
+          # Upload SARIF report to GitHub Security tab
+          format: sarif
+
+      # --- Upload SARIF to Security tab ---
+      - name: Upload ZAP SARIF report
+        if: always() # Always run this step
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          # The action-api-scan creates 'report.sarif' by default
+          sarif_file: report.sarif
 
       # Always tear down the environment
       - name: Shutdown Docker Compose stack

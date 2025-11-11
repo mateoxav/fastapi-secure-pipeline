@@ -60,7 +60,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
-
+      # --- Static Analysis: mypy ---
+      - name: Run mypy static type checking
+        run: mypy --config-file=mypy.ini app tests
+    
       # --- Tests + coverage gate ---
       - name: Run tests with coverage (min 85%)
         run: pytest --cov=app --cov-fail-under=85 -q
@@ -120,7 +123,7 @@ jobs:
         with:
           sarif_file: trivy-config.sarif
 
-      # --- Build & push image (only on main) ---
+      # --- Build & Scan (only on main) ---
       - name: Set up Docker Buildx
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/setup-buildx-action@v3.11.1
@@ -133,24 +136,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and load local image for scanning
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: build-and-push
+        id: build-load-scan
         uses: docker/build-push-action@v6.18.0
         with:
           context: .
           file: ./docker/Dockerfile
-          push: true
+          push: false
+          load: true # Load the image into the runner's daemon
           tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           provenance: false
 
-      # --- Trivy: scan built image ---
+      # --- Trivy: scan built image (Fail Fast) ---
       - name: Trivy image scan (main)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: image
-          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }} # Scan the local image
           format: sarif
           output: trivy-image.sarif
           severity: CRITICAL,HIGH
@@ -162,6 +166,19 @@ jobs:
         with:
           sarif_file: trivy-image.sarif
 
+      # --- Push & Attest (only on main, after scan) ---
+      - name: Build, Push, and Attest Docker image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: build-push-attest # New ID
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          # This enables SLSA provenance attestation automatically
+          provenance: true
+
       # --- Cosign: install ---
       - name: Install Cosign
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -172,7 +189,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           cosign sign --yes \
-            ${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
+            ${{ env.IMAGE_NAME }}@${{ steps.build-push-attest.outputs.digest }}
 
       # --- Cosign: verify signature inside CI ---
       - name: Verify image signature
@@ -181,16 +198,7 @@ jobs:
           cosign verify \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-identity-regexp "https://github.com/${{ github.repository }}/\.github/workflows/ci\.yml@.*" \
-            ${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
-
-      # --- SLSA provenance attestation ---
-      - name: Attest build provenance (SLSA)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/attest-build-provenance@v3
-        with:
-          subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build-and-push.outputs.digest }}
-          push-to-registry: true
+            ${{ env.IMAGE_NAME }}@${{ steps.build-push-attest.outputs.digest }}
 
       # --- Verify SLSA provenance (Cosign attestation) ---
       - name: Verify SLSA provenance attestation
@@ -200,4 +208,4 @@ jobs:
             --type slsaprovenance \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-identity-regexp "https://github.com/${{ github.repository }}/\.github/workflows/ci\.yml@.*" \
-            ${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
+            ${{ env.IMAGE_NAME }}@${{ steps.build-push-attest.outputs.digest }}

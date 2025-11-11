@@ -31,6 +31,16 @@ repos:
       - id: flake8
         additional_dependencies:
           - flake8-bugbear
+  # mypy - Static type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.0
+    hooks:
+      - id: mypy
+        args: [--config-file=mypy.ini]
+        # Pass files to mypy (app and tests)
+        files: ^(app|tests)/
+        additional_dependencies:
+          - sqlalchemy-mypy
 
   # Bandit - Python security linter (SAST-lite)
   - repo: https://github.com/PyCQA/bandit
