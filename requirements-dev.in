@@ -1,0 +1,9 @@
+pytest
+httpx
+pytest-asyncio
+black
+flake8
+isort
+alembic
+pip-tools
+pytest-cov
