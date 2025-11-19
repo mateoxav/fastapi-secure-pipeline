@@ -7,3 +7,4 @@ isort
 alembic
 pip-tools
 pytest-cov
+mypy

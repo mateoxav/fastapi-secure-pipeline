@@ -7,32 +7,73 @@
     <link href="/static/styles.css" rel="stylesheet">
 </head>
 <body>
-    <main>
-        <h1>DevSecOps API Demo</h1>
-        <section id="auth-section">
-            <h2>Authentication</h2>
-            <form id="register-form">
-                <input type="email" id="register-email" placeholder="Email" required>
-                <input type="password" id="register-password" placeholder="Password" required>
-                <button type="submit">Register</button>
+    <main class="container">
+        <div style="text-align: center; margin-bottom: 25px;">
+			<h1 class="shimmer">DevSecOps API Demo</h1>
+		</div>
+        <section id="login-view" class="auth-view">
+            <h1 class="auth-view__title">Login</h1>
+            <p class="auth-view__subtitle">Welcome back. Please log in to continue.</p>
+            <form id="login-form" class="auth-form">
+                <div class="auth-form__field">
+                    <label for="login-email" class="auth-form__label">Email</label>
+                    <input type="email" id="login-email" class="auth-form__input" placeholder="you@example.com" required>
+                </div>
+                <div class="auth-form__field">
+                    <label for="login-password" class="auth-form__label">Password</label>
+                    <input type="password" id="login-password" class="auth-form__input" placeholder="••••••••••••" required>
+                </div>
+                <button type="submit" class="button button--primary">Login</button>
             </form>
-            <form id="login-form">
-                <input type="email" id="login-email" placeholder="Email" required>
-                <input type="password" id="login-password" placeholder="Password" required>
-                <button type="submit">Login</button>
-            </form>
-            <p id="auth-status"></p>
+            <p id="login-status" class="auth-view__status"></p>
+            <p class="auth-view__switch">
+                Don't have an account? <a href="#" id="show-register-link">Sign up now</a>
+            </p>
         </section>
 
-        <section id="items-section" class="hidden">
-            <h2>Your Items</h2>
-            <form id="create-item-form">
-                <input type="text" id="item-name" placeholder="Item Name" required>
-                <input type="text" id="item-desc" placeholder="Item Description">
-                <button type="submit">Create Item</button>
+        <section id="register-view" class="auth-view hidden">
+            <h1 class="auth-view__title">Create Account</h1>
+            <p class="auth-view__subtitle">Get started with your secure account.</p>
+            <form id="register-form" class="auth-form">
+                <div class="auth-form__field">
+                    <label for="register-email" class="auth-form__label">Email</label>
+                    <input type="email" id="register-email" class="auth-form__input" placeholder="you@example.com" required>
+                </div>
+                <div class="auth-form__field">
+                    <label for="register-password" class="auth-form__label">Password</label>
+                    <input type="password" id="register-password" class="auth-form__input" placeholder="Min 12 characters" required>
+                </div>
+                 <div class="auth-form__field">
+                    <label for="register-confirm-password" class="auth-form__label">Confirm Password</label>
+                    <input type="password" id="register-confirm-password" class="auth-form__input" placeholder="Repeat your password" required>
+                </div>
+                <button type="submit" class="button button--primary">Create Account</button>
             </form>
-            <ul id="items-list"></ul>
-            <button id="logout-btn">Logout</button>
+            <p id="register-status" class="auth-view__status"></p>
+            <p class="auth-view__switch">
+                Already have an account? <a href="#" id="show-login-link">Log in</a>
+            </p>
+        </section>
+
+        <section id="items-section" class="items-view hidden">
+            <header class="items-view__header">
+                <h2 class="items-view__title">Your Items</h2>
+                <button id="logout-btn" class="button button--secondary">Logout</button>
+            </header>
+            
+            <form id="create-item-form" class="items-form">
+                <h3 class="items-form__title">Create New Item</h3>
+                <div class="items-form__fields">
+                    <input type="text" id="item-name" class="items-form__input" placeholder="Item Name" required>
+                    <input type="text" id="item-desc" class="items-form__input" placeholder="Item Description">
+                    <button type="submit" class="button button--primary">Create Item</button>
+                </div>
+            </form>
+
+            <div class="items-list-container">
+                <ul id="items-list" class="items-list">
+                    </ul>
+            </div>
         </section>
     </main>
     <script src="/static/app.js"></script>
