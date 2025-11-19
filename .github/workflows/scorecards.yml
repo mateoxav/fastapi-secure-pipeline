@@ -2,19 +2,22 @@ name: Security - OpenSSF Scorecard
 
 on:
   schedule:
-    - cron: "0 8 * * 1" # Weekly on Monday at 8 AM
+    - cron: "0 8 * * 1"
   push:
     branches: [ main ]
 
 permissions:
   contents: read
-  security-events: write
-  id-token: write
 
 jobs:
   analysis:
     name: OpenSSF Scorecard analysis
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
 
     steps:
       - name: Checkout repository (full history for checks)
@@ -27,7 +30,7 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: true # Publishes to Security tab for visibility
+          publish_results: true
 
       - name: Upload Scorecard SARIF to Security tab
         uses: github/codeql-action/upload-sarif@v4
