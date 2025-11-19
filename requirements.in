@@ -8,6 +8,6 @@ python-jose[cryptography]
 passlib[argon2]==1.7.4
 python-multipart
 email-validator
-alembic
+alembic==1.17.2
 argon2-cffi
 gunicorn

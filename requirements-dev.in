@@ -4,7 +4,7 @@ pytest-asyncio
 black
 flake8
 isort
-alembic
+alembic==1.17.2
 pip-tools
 pytest-cov
 mypy
